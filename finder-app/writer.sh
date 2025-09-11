@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# Writer script for assignment 1
+#
+# Will Morrison
+
 # Verify that arguments are present
 writeFile=$1
 if [ -z "${writeFile}" ]; then

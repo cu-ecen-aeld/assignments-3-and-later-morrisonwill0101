@@ -1,5 +1,7 @@
 #!/bin/bash
+
 # aesd assignment 1 writer.
+#
 # Will Morrison
 
 filesDir=$1
