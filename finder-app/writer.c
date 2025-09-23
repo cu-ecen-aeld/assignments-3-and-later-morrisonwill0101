@@ -9,6 +9,7 @@
 #include <syslog.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <string.h>
 
 #define ERROR_CODE 1
 #define DEFAULT_PERMISSIONS 0644
@@ -16,7 +17,7 @@
 int main(int argc, char *arg[]) {
 
     // Setup Log
-    openlog("writer", LOG_CONS, LOG_USER);
+    openlog("writer", LOG_CONS | LOG_NDELAY , LOG_USER);
 
     // Verify args
     if(argc != 3) {
@@ -36,7 +37,8 @@ int main(int argc, char *arg[]) {
     syslog(LOG_DEBUG, "Writing %s to %s", arg[1], arg[2]);
 
     ssize_t nr;
-    nr = write(fd, arg[2], sizeof(arg[2]));
+
+    nr = write(fd, arg[2], strlen(arg[2]));
     if (nr == -1) {
         //error
         syslog(LOG_ERR, "Failed to write file!");
