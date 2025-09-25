@@ -68,30 +68,22 @@ bool do_exec(int count, ...)
 
     va_end(args);
 
-    printf("Command: %s", command[0]);
-    printf("\n");
-
     int pid = fork();
-    printf("FORK! PID: %d\n",pid);
-
 
     if(pid == -1)
         return false;
     else if(pid == 0) {
-        int a = execv(command[0],command);
-        printf("PID: %d execv: %d \n",pid,a);
+        execv(command[0],command);
+        exit(EXIT_FAILURE);
         return false;
     }
     else {
         int status;
         waitpid(pid, &status, 0);
-        //return status == 0;
-        printf("PID: %d STATUS: %d \n",pid,status);
-        printf("WIFEXITED: %d \n",WIFEXITED(status));
-        if ( WIFEXITED(status)){
-            printf("WEXITSTATUS: %d \n",WEXITSTATUS(status));
-            return WEXITSTATUS(status) == 0;
-        }
+        return status == 0;
+//        if ( WIFEXITED(status)){
+//            return WEXITSTATUS(status) == 0;
+//        }
     }
 
     return false;
