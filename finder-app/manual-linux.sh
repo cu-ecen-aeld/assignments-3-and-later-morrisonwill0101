@@ -85,15 +85,17 @@ make defconfig
 make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} 
 make CONFIG_PREFIX=${OUTDIR}/rootfs ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} install
 
+cd ${OUTDIR}/rootfs
+
 echo "Library dependencies"
 ${CROSS_COMPILE}readelf -a bin/busybox | grep "program interpreter"
 ${CROSS_COMPILE}readelf -a bin/busybox | grep "Shared library"
 
 # TODO: Add library dependencies to rootfs
-cp ${CC_LIB_DIR}/lib/ld-linux-aarch64.so.1 ${OUT_DIR}/rootfs/lib
+cp ${CC_LIB_DIR}/lib/ld-linux-aarch64.so.1 ${OUTDIR}/rootfs/lib
 
 cd ${CC_LIB_DIR}/lib64
-cp libm.so.6 libresolv.so.2 libc.so.6 ${OUT_DIR}/rootfs/lib64
+cp libm.so.6 libresolv.so.2 libc.so.6 ${OUTDIR}/rootfs/lib64
 
 # TODO: Make device nodes
 cd ${OUTDIR}/rootfs 
@@ -118,7 +120,7 @@ cp writer finder.sh conf/username.txt conf/assignment.txt finder-test.sh ${OUTDI
 # TODO: Create initramfs.cpio.gz
 cd ${OUTDIR}/rootfs
 
-find . cpio -H newc -ov --owner root:root > ${OUTDIR}/initramfs.cpio
+find . | cpio -H newc -ov --owner root:root > ${OUTDIR}/initramfs.cpio
 
 cd ..
 gzip -f initramfs.cpio
