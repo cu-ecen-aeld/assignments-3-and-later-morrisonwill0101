@@ -12,6 +12,8 @@ BUSYBOX_VERSION=1_33_1
 FINDER_APP_DIR=$(realpath $(dirname $0))
 ARCH=arm64
 CROSS_COMPILE=aarch64-none-linux-gnu-
+CC_LIB_DIR=/home/will/cross-compiler/arm-gnu-toolchain-13.3.rel1-x86_64-aarch64-none-linux-gnu/aarch64-none-linux-gnu/libc
+HW_DIR=/home/will/Documents/aesd-assignment1-morrisonwill0101/finder-app
 
 if [ $# -lt 1 ]
 then
@@ -35,6 +37,19 @@ if [ ! -e ${OUTDIR}/linux-stable/arch/${ARCH}/boot/Image ]; then
     git checkout ${KERNEL_VERSION}
 
     # TODO: Add your kernel build steps here
+    # Clean
+    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} mrproper
+
+    # Default Config
+    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} defconfig
+
+    # build 
+    make -j4 ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} all
+
+    # Don't build modules
+    # build device tree
+    make -j4 ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} dtbs
+    
 fi
 
 echo "Adding the Image in outdir"
@@ -48,6 +63,10 @@ then
 fi
 
 # TODO: Create necessary base directories
+mkdir ${OUTDIR}/rootfs
+cd ${OUTDIR}/rootfs
+
+mkdir -p bin dev etc lib lib64 proc sys sbin home var/log tmp usr/bin usr/sbin 
 
 cd "$OUTDIR"
 if [ ! -d "${OUTDIR}/busybox" ]
@@ -61,20 +80,45 @@ else
 fi
 
 # TODO: Make and install busybox
+make distclean
+make defconfig
+make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} 
+make CONFIG_PREFIX=${OUTDIR}/rootfs ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} install
 
 echo "Library dependencies"
 ${CROSS_COMPILE}readelf -a bin/busybox | grep "program interpreter"
 ${CROSS_COMPILE}readelf -a bin/busybox | grep "Shared library"
 
 # TODO: Add library dependencies to rootfs
+cp ${CC_LIB_DIR}/lib/ld-linux-aarch64.so.1 ${OUT_DIR}/rootfs/lib
+
+cd ${CC_LIB_DIR}/lib64
+cp libm.so.6 libresolv.so.2 libc.so.6 ${OUT_DIR}/rootfs/lib64
 
 # TODO: Make device nodes
+cd ${OUTDIR}/rootfs 
+sudo mknod -m 666 dev/null c 1 3
+sudo mknod -m 666 dev/console c 5 1
 
 # TODO: Clean and build the writer utility
+cd ${HW_DIR}
+make clean
+make CROSS_COMPILE=${CROSS_COMPILE} writer
 
 # TODO: Copy the finder related scripts and executables to the /home directory
 # on the target rootfs
 
+cp writer finder.sh conf/username.txt conf/assignment.txt finder-test.sh ${OUTDIR}/rootfs/home
+
+#Edit finder-test.sh
+
 # TODO: Chown the root directory
 
+
 # TODO: Create initramfs.cpio.gz
+cd ${OUTDIR}/rootfs
+
+find . cpio -H newc -ov --owner root:root > ${OUTDIR}/initramfs.cpio
+
+cd ..
+gzip -f initramfs.cpio
