@@ -53,9 +53,7 @@ if [ ! -e ${OUTDIR}/linux-stable/arch/${ARCH}/boot/Image ]; then
 fi
 
 echo "Adding the Image in outdir"
-
-mkdir -p ${OUTDIR}/Image
-cp -r ${OUTDIR}/linux-stable/arch/${ARCH}/boot/Image ${OUTDIR}/Image
+cp -R ${OUTDIR}/linux-stable/arch/${ARCH}/boot/* ${OUTDIR}
 
 echo "Creating the staging directory for the root filesystem"
 cd "$OUTDIR"
@@ -69,7 +67,7 @@ fi
 mkdir ${OUTDIR}/rootfs
 cd ${OUTDIR}/rootfs
 
-mkdir -p bin dev etc lib lib64 proc sys sbin home var/log tmp usr/bin usr/sbin 
+mkdir -p bin dev etc lib lib64 proc sys sbin home/conf var/log tmp usr/bin usr/sbin 
 
 cd "$OUTDIR"
 if [ ! -d "${OUTDIR}/busybox" ]
@@ -109,13 +107,21 @@ sudo mknod -m 666 dev/console c 5 1
 cd ${HW_DIR}
 make clean
 make CROSS_COMPILE=${CROSS_COMPILE} writer
+cp autorun-qemu.sh ${OUTDIR}/rootfs/home
 
 # TODO: Copy the finder related scripts and executables to the /home directory
 # on the target rootfs
 
 cp writer finder.sh conf/username.txt conf/assignment.txt finder-test.sh ${OUTDIR}/rootfs/home
+cd conf 
+cp username.txt assignment.txt ${OUTDIR}/rootfs/home/conf
 
 #Edit finder-test.sh
+sed -i 's/..\/conf/conf/g' ${OUTDIR}/rootfs/home/finder-test.sh 
+sed -i 's/make/#make/g' ${OUTDIR}/rootfs/home/finder-test.sh 
+
+#Edit finder.sh to remove finder.sh error
+sed -i 's/bash/sh/g' ${OUTDIR}/rootfs/home/finder.sh 
 
 # TODO: Chown the root directory
 sudo chown root:root ${OUTDIR}/rootfs/
