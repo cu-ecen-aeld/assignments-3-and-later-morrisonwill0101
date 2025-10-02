@@ -12,8 +12,8 @@ BUSYBOX_VERSION=1_33_1
 FINDER_APP_DIR=$(realpath $(dirname $0))
 ARCH=arm64
 CROSS_COMPILE=aarch64-none-linux-gnu-
-CC_LIB_DIR=/home/will/cross-compiler/arm-gnu-toolchain-13.3.rel1-x86_64-aarch64-none-linux-gnu/aarch64-none-linux-gnu/libc
-HW_DIR=/home/will/Documents/aesd-assignment1-morrisonwill0101/finder-app
+HW_DIR=$(pwd)
+echo $HW_DIR
 
 if [ $# -lt 1 ]
 then
@@ -93,9 +93,8 @@ ${CROSS_COMPILE}readelf -a bin/busybox | grep "program interpreter"
 ${CROSS_COMPILE}readelf -a bin/busybox | grep "Shared library"
 
 # TODO: Add library dependencies to rootfs
-cp ${CC_LIB_DIR}/lib/ld-linux-aarch64.so.1 ${OUTDIR}/rootfs/lib
-
-cd ${CC_LIB_DIR}/lib64
+cd ${HW_DIR}
+cp ld-linux-aarch64.so.1 ${OUTDIR}/rootfs/lib
 cp libm.so.6 libresolv.so.2 libc.so.6 ${OUTDIR}/rootfs/lib64
 
 # TODO: Make device nodes
