@@ -54,6 +54,9 @@ fi
 
 echo "Adding the Image in outdir"
 
+mkdir -p ${OUTDIR}/Image
+cp -r ${OUTDIR}/linux-stable/arch/${ARCH}/boot/Image ${OUTDIR}/Image
+
 echo "Creating the staging directory for the root filesystem"
 cd "$OUTDIR"
 if [ -d "${OUTDIR}/rootfs" ]
@@ -115,6 +118,7 @@ cp writer finder.sh conf/username.txt conf/assignment.txt finder-test.sh ${OUTDI
 #Edit finder-test.sh
 
 # TODO: Chown the root directory
+sudo chown root:root ${OUTDIR}/rootfs/
 
 
 # TODO: Create initramfs.cpio.gz
