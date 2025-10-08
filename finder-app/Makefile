@@ -2,7 +2,7 @@ writer:
 	$(CROSS_COMPILE)gcc -o writer writer.c
 
 all:
-	$(CROSS_COMPILE)gcc -o writer writer.c
+	$(CC) -o writer writer.c
 
 clean:
 	-rm ./writer
