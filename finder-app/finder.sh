@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # aesd assignment 1 writer.
 #
