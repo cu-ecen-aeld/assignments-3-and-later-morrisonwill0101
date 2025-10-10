@@ -3,7 +3,6 @@
 // 10/8/25
 
 
-#include "aesdsocket.h"
 #include <syslog.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -48,6 +47,7 @@ int main(int argc, char const *argv[]) {
     syslog(LOG_DEBUG, "$$$ getaddrinfo result: %d\n",result);
     if (result != 0){
         syslog(LOG_ERR, "Failed getaddrinfo: %d", result);
+        close(fdSock);
         freeaddrinfo(sockResult);
         exit(ERROR_CODE);
     }
@@ -67,6 +67,7 @@ int main(int argc, char const *argv[]) {
     if(result < 0){
         printf("Bind Failure: %d\n",errno);
         syslog(LOG_ERR, "Failed bind: %d", result);
+        close(fdSock);
         exit(ERROR_CODE);
     }
 
@@ -76,6 +77,7 @@ int main(int argc, char const *argv[]) {
     syslog(LOG_DEBUG, "$$$ listen result: %d\n",result);
     if(result == -1){
         syslog(LOG_ERR, "listen failure: %d\n",errno);
+        close(fdSock);
         exit(ERROR_CODE);
     }
 
@@ -84,17 +86,63 @@ int main(int argc, char const *argv[]) {
     int fdCli = accept(fdSock, (struct sockaddr *) &cliAddr, &cliLen);
     printf("$$$ accept fd: %d\n",fdCli);
     syslog(LOG_DEBUG, "$$$ accept fd: %d\n",fdCli);
+
     if (fdCli < 0) {
+        syslog(LOG_ERR, "$$$ accept failure: %d\n",errno);
+        close(fdSock);
         exit(ERROR_CODE);
     }
-    // log to syslog
-//    syslog(strcat("Accepted connection from xxx","aa"), , LOG_NDELAY, LOG_USER);
 
-//    char receiveBuf[255];
-//    recv(cliAddr.acceptedfd, 
+    // log to syslog
+    syslog(LOG_USER, "Accepted connection from %s", inet_ntop(AF_INET, cliAddr.sa_data, str, sizeof(str)));
+
+    char receiveBuf[500];
+    result = recv(fdCli, receiveBuf, 500, 0); 
+    printf("$$$ receive len: %d\n", result);
+
+    if (result == -1) {
+        syslog(LOG_ERR, "$$$ recv failure: %d\n",errno);
+        exit(ERROR_CODE);
+    }
+
+    receiveBuf[result] = '\0';
+
+    syslog(LOG_USER, "Received: %s", receiveBuf);
+
     // write recieved data to /var/tmp/aesdsocketdata
-    //
+    FILE *fptr;
+    fptr = fopen("/var/tmp/aesdsocketdata", "a");
+    if (fptr == NULL){
+        close(fdSock);
+        exit(ERROR_CODE);
+    }
+
+    fprintf(fptr, "%s", receiveBuf);
+    fclose(fptr);
+
     // send full content of /var/tmp/aesdsocketdata to client
+    fptr = fopen("/var/tmp/aesdsocketdata", "r");
+    if (fptr == NULL){
+        exit(ERROR_CODE);
+    }
+
+    char buffer[256];
+    while (fgets(buffer, sizeof(buffer), fptr) != NULL) {
+        syslog(LOG_USER,("%s", buffer));
+        if(send(fdCli, buffer, strlen(buffer), 0) == -1){
+            syslog(LOG_ERR, "send failure: %d\n",errno);
+            fclose(fptr);
+            close(fdSock);
+            exit(ERROR_CODE);
+        } 
+    }
+
+    fclose(fptr);
+    if (close(fdSock) == -1){
+        exit(ERROR_CODE);
+    }
+
+    syslog(LOG_USER, "Closed connection from %s", inet_ntop(AF_INET, cliAddr.sa_data, str, sizeof(str)));
     
     return 1;
 }
