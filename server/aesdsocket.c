@@ -16,6 +16,8 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <signal.h>
+#include <sys/stat.h>
+
 
 #define ERROR_CODE -1
 void sigHandler(int signum);
@@ -39,36 +41,58 @@ int main(int argc, char const *argv[]) {
     // setup log
     openlog("aesdserver", LOG_CONS | LOG_NDELAY, LOG_USER);
     syslog(LOG_DEBUG, "Start aesdserver");
+    if( argc > 1) {
+        syslog(LOG_DEBUG, "arg 1: %s", argv[1]);
+    }
 
     // setup signals
     signal(SIGINT, sigHandler);
     signal(SIGTERM, sigHandler);
 
-    // setup server
-    fdSock = socket(AF_INET, SOCK_STREAM, 0);
-    printf("$$$ fdSock: %d\n",fdSock);
-    syslog(LOG_DEBUG, "fdSock: %d\n",fdSock);
-    if(fdSock < 0){
-        syslog(LOG_ERR, "Failed to create socket: %d", fdSock);
-        handleCleanup(fdSock, fdSock, fptr, 1);
-    }
-
     // open stream socket on port 9000
     int result = getaddrinfo(NULL, "9000", &hints, &sockResult);
-    syslog(LOG_DEBUG, "$$$ getaddrinfo result: %d\n",result);
+    syslog(LOG_DEBUG, "getaddrinfo result: %d\n",result);
     if (result != 0){
         syslog(LOG_ERR, "Failed getaddrinfo: %d", result);
         freeaddrinfo(sockResult);
         handleCleanup(fdSock, fdCli, fptr,1);
     }
 
+
     // fork if -d argument
+    if (argc > 1) {
+        if (strcmp(argv[1], "-d") == 0 ){
+            syslog(LOG_USER, "forking: %s", argv[1]);
+            pid_t pid = fork();
+
+            if (pid < 0){
+                handleCleanup(fdSock, fdCli, fptr,1);
+                exit(ERROR_CODE);
+            }
+            if (pid > 0) {
+                exit(0);
+            }
+        }
+    }
+   
+    // setup server
+    fdSock = socket(AF_INET, SOCK_STREAM, 0);
+    syslog(LOG_DEBUG, "fdSock: %d\n",fdSock);
+    if(fdSock < 0){
+        syslog(LOG_ERR, "Failed to create socket: %d", fdSock);
+        handleCleanup(fdSock, fdSock, fptr, 1);
+    }
+
+    if (setsockopt(fdSock, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int)) < 0){
+
+    }
 
     // bind 
     hostAddr = sockResult;
+
     result = bind(fdSock, hostAddr->ai_addr, hostAddr->ai_addrlen);
-    syslog(LOG_DEBUG, "$$$ bind result: %d\n",result);
     printf("%s\n", inet_ntop(AF_INET, sockResult->ai_addr, str, sizeof(str)));
+
     freeaddrinfo(sockResult);
     if(result < 0){
         printf("Bind Failure: %d\n",errno);
@@ -78,8 +102,6 @@ int main(int argc, char const *argv[]) {
 
     // Listen and accept connection
     result = listen(fdSock,50);
-    syslog(LOG_DEBUG, "$$$ listen result: %d\n",result);
-
     if(result == -1){
         syslog(LOG_ERR, "listen failure: %d\n",errno);
         handleCleanup(fdSock, fdCli, fptr, 1); 
@@ -88,10 +110,9 @@ int main(int argc, char const *argv[]) {
     // Keep accepting new clients until SIGINT or SIGTERM
     for(;;) {
         fdCli = accept(fdSock, (struct sockaddr *) &cliAddr, &cliLen);
-        syslog(LOG_DEBUG, "$$$ accept fd: %d\n",fdCli);
 
         if (fdCli < 0) {
-            syslog(LOG_ERR, "$$$ accept failure: %d\n",errno);
+            syslog(LOG_ERR, "Accept failure: %d\n",errno);
             handleCleanup(fdSock, fdCli, fptr, 1); 
         }
 
@@ -133,7 +154,7 @@ int main(int argc, char const *argv[]) {
 
         char buffer[256];
         while (fgets(buffer, sizeof(buffer), fptr) != NULL) {
-            syslog(LOG_USER,"sending: %s", buffer);
+//            syslog(LOG_USER,"sending: %s", buffer);
             if(send(fdCli, buffer, strlen(buffer), 0) == -1){
                 syslog(LOG_ERR, "send failure: %d\n",errno);
                 handleCleanup(fdSock, fdCli, fptr, 1); 
