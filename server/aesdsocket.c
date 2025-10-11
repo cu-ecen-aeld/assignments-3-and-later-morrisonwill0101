@@ -18,11 +18,8 @@
 #include <signal.h>
 
 #define ERROR_CODE -1
-#define DEFAULT_PERMISSIONS 0644
-
 void sigHandler(int signum);
 void handleCleanup(int fdsock, int fdcli, FILE *tmpFile, int err);
-volatile sig_atomic_t sigRec= 0;
 
 int main(int argc, char const *argv[]) {
 
@@ -30,10 +27,14 @@ int main(int argc, char const *argv[]) {
     struct addrinfo hints;
     struct sockaddr sockAddr, cliAddr;
     socklen_t cliLen;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags = AI_PASSIVE;
     FILE *fptr = NULL;
     int fdSock, fdCli;
+    char str[INET6_ADDRSTRLEN];
+
+    cliLen = sizeof(cliAddr);
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_PASSIVE;
 
     // setup log
     openlog("aesdserver", LOG_CONS | LOG_NDELAY, LOG_USER);
@@ -54,7 +55,6 @@ int main(int argc, char const *argv[]) {
 
     // open stream socket on port 9000
     int result = getaddrinfo(NULL, "9000", &hints, &sockResult);
-    printf("$$$ getaddrinfo result: %d\n",result);
     syslog(LOG_DEBUG, "$$$ getaddrinfo result: %d\n",result);
     if (result != 0){
         syslog(LOG_ERR, "Failed getaddrinfo: %d", result);
@@ -62,15 +62,12 @@ int main(int argc, char const *argv[]) {
         handleCleanup(fdSock, fdCli, fptr,1);
     }
 
-
     // fork if -d argument
 
     // bind 
     hostAddr = sockResult;
     result = bind(fdSock, hostAddr->ai_addr, hostAddr->ai_addrlen);
-    printf("$$$ bind result: %d\n",result);
     syslog(LOG_DEBUG, "$$$ bind result: %d\n",result);
-    char str[INET6_ADDRSTRLEN];
     printf("%s\n", inet_ntop(AF_INET, sockResult->ai_addr, str, sizeof(str)));
     freeaddrinfo(sockResult);
     if(result < 0){
@@ -79,22 +76,18 @@ int main(int argc, char const *argv[]) {
         handleCleanup(fdSock, fdCli, fptr, 1); 
     }
 
-        // Listen and accept connection
-        result = listen(fdSock,50);
-        printf("$$$ listen result: %d\n",result);
-        syslog(LOG_DEBUG, "$$$ listen result: %d\n",result);
-        if(result == -1){
-            syslog(LOG_ERR, "listen failure: %d\n",errno);
-            handleCleanup(fdSock, fdCli, fptr, 1); 
-        }
+    // Listen and accept connection
+    result = listen(fdSock,50);
+    syslog(LOG_DEBUG, "$$$ listen result: %d\n",result);
 
-        cliLen = sizeof(cliAddr);
+    if(result == -1){
+        syslog(LOG_ERR, "listen failure: %d\n",errno);
+        handleCleanup(fdSock, fdCli, fptr, 1); 
+    }
 
     // Keep accepting new clients until SIGINT or SIGTERM
     for(;;) {
-        syslog(LOG_DEBUG, "$$$ accepting?: %d\n", fdSock);
         fdCli = accept(fdSock, (struct sockaddr *) &cliAddr, &cliLen);
-        printf("$$$ accept fd: %d\n",fdCli);
         syslog(LOG_DEBUG, "$$$ accept fd: %d\n",fdCli);
 
         if (fdCli < 0) {
@@ -105,26 +98,31 @@ int main(int argc, char const *argv[]) {
         // log to syslog
         syslog(LOG_USER, "Accepted connection from %s", inet_ntop(AF_INET, cliAddr.sa_data, str, sizeof(str)));
 
-        char receiveBuf[500];
-        result = recv(fdCli, receiveBuf, 500, 0); 
-        printf("$$$ receive len: %d\n", result);
-
-        if (result == -1) {
-            syslog(LOG_ERR, "$$$ recv failure: %d\n",errno);
-            handleCleanup(fdSock, fdCli, fptr, 1); 
-        }
-
-        receiveBuf[result] = '\0';
-
-        syslog(LOG_USER, "Received: %s", receiveBuf);
-
-        // write recieved data to /var/tmp/aesdsocketdata
+        // Open File for Writing
         fptr = fopen("/var/tmp/aesdsocketdata", "a");
         if (fptr == NULL){
             handleCleanup(fdSock, fdCli, fptr, 1); 
         }
 
-        fprintf(fptr, "%s", receiveBuf);
+        char receiveBuf[1023];
+
+        do {
+            result = recv(fdCli, receiveBuf, 1023, 0); 
+            syslog(LOG_USER, "Recv Len: %d\n",result);
+
+
+            if (result == -1) {
+                syslog(LOG_ERR, "$$$ recv failure: %d\n",errno);
+                handleCleanup(fdSock, fdCli, fptr, 1); 
+            }
+
+
+            size_t written = fwrite(receiveBuf, sizeof(char), result, fptr);
+            if( written != result) {
+                handleCleanup(fdSock, fdCli, fptr, 1); 
+            }
+        } while( result == 1023);
+
         fclose(fptr);
 
         // send full content of /var/tmp/aesdsocketdata to client
@@ -135,7 +133,7 @@ int main(int argc, char const *argv[]) {
 
         char buffer[256];
         while (fgets(buffer, sizeof(buffer), fptr) != NULL) {
-            syslog(LOG_USER,("%s", buffer));
+            syslog(LOG_USER,"sending: %s", buffer);
             if(send(fdCli, buffer, strlen(buffer), 0) == -1){
                 syslog(LOG_ERR, "send failure: %d\n",errno);
                 handleCleanup(fdSock, fdCli, fptr, 1); 
@@ -144,9 +142,6 @@ int main(int argc, char const *argv[]) {
 
         fclose(fptr);
         close(fdCli);
-//        if (close(fdSock) == -1){
- //           exit(ERROR_CODE);
-  //      }
 
         syslog(LOG_USER, "Closed connection from %s", inet_ntop(AF_INET, cliAddr.sa_data, str, sizeof(str)));
     } 
@@ -156,15 +151,19 @@ int main(int argc, char const *argv[]) {
 
 void sigHandler(int signum){
     syslog(LOG_USER, "Caught signal, exiting");
-    sigRec = 1;
+    printf("%c", '\n');
+    remove("/var/tmp/aesdsocketdata");
+    _exit(0);
 }
 
 void handleCleanup(int fdsock, int fdcli, FILE *tmpFile, int err){
     if (fdsock > 0) {
+        printf("Closing socket: %d", fdsock);
         close(fdsock);
     }
 
     if (fdcli > 0) {
+        printf("Closing socket: %d", fdcli);
         close(fdcli);
     }
 
@@ -172,7 +171,7 @@ void handleCleanup(int fdsock, int fdcli, FILE *tmpFile, int err){
         fclose(tmpFile);
     }
 
-    remove("/var/tmp/aesdsocket");
+    remove("/var/tmp/aesdsocketdata");
 
     if(err) {
         exit(ERROR_CODE);
