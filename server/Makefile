@@ -1,6 +1,7 @@
 all:
-	$(CROSS_COMPILE)gcc -o aesdsocket aesdsocket.c
+	$(CC) -o aesdsocket aesdsocket.c
 
 clean:
 	-rm ./aesdsocket
 
+default: all
